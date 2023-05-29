@@ -1,60 +1,71 @@
 package main
 
-import "github.com/labstack/echo/v4"
+import (
+	"net/http"
 
-type People struct {
+	"github.com/labstack/echo/v4"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
+)
+
+var DB *gorm.DB
+
+type User struct {
+	Id int `gorm:"primaryKey autoIncrement" json:"id"`
 	Name string `json:"name"`
-	Age int `json:"age"`
-}
-
-type LoginRequest struct {
-	Email string `json:"email"`
+	PhotoProfile string `json:"photoProfile"`
 	Password string `json:"password"`
 }
 
 type BaseResponse struct {
 	Message string `json:"message"`
-	Data interface{} `json:"name"`
+	Data interface{} `json:"data"`
 }
 
-func main(){ 
+func main() {
+	connectDatabase()
 	e := echo.New()
-	e.GET("/peoples", GetPeopleController)
-	e.GET("/peoples/:id", GetDetailPeopleController)
-	e.POST("/login", LoginController)
-
+	e.GET("/users", GetUserController)
+	e.POST("/users", InsertUserController)
 	e.Start(":8000")
 }
 
-func LoginController(c echo.Context) error {
-	var loginRequest LoginRequest
-	c.Bind(&loginRequest)
-	return c.JSON(200, loginRequest)
+func InsertUserController(c echo.Context) error {
+	var userInput User
+	c.Bind(&userInput)
+
+	result := DB.Create(&userInput)
+	if result.Error != nil {
+		return c.JSON(http.StatusInternalServerError, nil)
+	}
+	return c.JSON(http.StatusOK, BaseResponse{
+		Message: "success",
+		Data: userInput,
+	})
 }
 
-func GetDetailPeopleController(c echo.Context) error {
-	var id = c.Param("id")
-	var people = People{Name: id, Age: 1}
-	return c.JSON(200, people)
+func GetUserController(c echo.Context) error {
+	var users []User
+	result := DB.Find(&users)
+	if result.Error != nil {
+		return c.JSON(http.StatusInternalServerError, nil)
+	}
+	return c.JSON(http.StatusOK, BaseResponse{
+		Message: "Success",
+		Data: users,
+	})
 }
 
-func GetPeopleController(c echo.Context) error {
-	var location = c.QueryParam("location")
+func connectDatabase(){
+	dsn := "root:123ABC4d.@tcp(127.0.0.1:3306)/prakerja4_twitter?charset=utf8mb4&parseTime=True&loc=Local"
+	var err error
+	DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
+	if err != nil {
+		panic("Database Error")
+	}
+	migration()
+}
 
-
-	var peopleData []People
-
-	var people People
-	people.Name = location
-	people.Age = 20
-	peopleData = append(peopleData, people)
-
-	people.Name = location
-	people.Age = 30
-	peopleData = append(peopleData, people)
-
-	var response BaseResponse
-	response.Data = peopleData
-	response.Message = "Berhasil"
-	return c.JSON(200, response)
+func migration(){
+	DB.AutoMigrate(&User{})
 }
